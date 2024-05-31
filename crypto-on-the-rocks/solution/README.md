@@ -58,13 +58,9 @@ The lattice attack leverages the structure of the signature equations to recover
 
 1. Compute the hash of each message $e_i = \text{HASH}(m_i)$.
 2. For each signature, express $s_i$ as:
-   $$
-   s_i = k_i^{-1}(e_i + r_i d) \mod n
-   $$
+   $$s_i = k_i^{-1}(e_i + r_i d) \mod n$$
    Rearrange to get:
-   $$
-   k_i = s_i^{-1}(e_i + r_i d) \mod n
-   $$
+   $$k_i = s_i^{-1}(e_i + r_i d) \mod n$$
 3. Using the biased $k$ values, we know the MSBs are zero. This can be modeled as a hidden number problem (HNP).
 4. Construct a lattice basis to solve for the private key $d$ using the Lenstra–Lenstra–Lovász (LLL) algorithm.
 
@@ -130,6 +126,7 @@ This challenge demonstrates the practical application of lattice-based cryptanal
 
 
 ### Script in use
+[exploit.py](https://github.com/supaaasuge/CTF-Challenges/blob/main/crypto-on-the-rocks/solution/exploit.py)
 ```bash
 python exploit.py 
 [+] Opening connection to 172.17.0.2 on port 1337: Done
