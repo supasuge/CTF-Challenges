@@ -37,8 +37,9 @@ The public key $Q$ is computed as $Q = dG$.
 
 #### Challenge Implementation
 
-The provided `challenge.py` script performs the ECDSA signing and encryption of the flag. The `ecdsa_sign` function generates signatures using a biased nonce $k$ where the most significant bits (MSBs) are zero.
+The provided `challenge.py` script performs the ECDSA signing and encryption of the flag. The `ecdsa_sign` function generates signatures using a biased nonce $k$ where the $9$ most significant bits (MSBs) are zero. This is a common mistake with the NIST P-521 Curve as it can be easily mistaken for $512$ instead of $521$.
 
+**Vulnerability**
 ```python
 def get_k() -> int:
     return int.from_bytes(hashlib.sha512(os.urandom(512//8)).digest(), byteorder='big') % n
