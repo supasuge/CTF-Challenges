@@ -6,6 +6,7 @@ Within PuTTY, when utilizing the NIST P-521 elliptic curve, the implementation g
 
 ## Challenge Writeup
 **Challenge Source Code**
+- `chal.py`
 ```python
 from sage.all import *
 from typing import Tuple
@@ -309,6 +310,165 @@ def main(n_sigs:int):
 
 if __name__ == "__main__":
     main(n_sigs)
+```
+
+- `utils.py`
+```python
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.backends import default_backend
+from sage.all import matrix, QQ
+import hashlib
+import re
+from math import log2
+curve = ec.SECP521R1()
+
+def parse_pub(inp):
+    try:
+        match = re.search(r"Public Key \(X, Y\): \((\d+), (\d+)\)", inp)
+        if match:
+            x = int(match.group(1))
+            y = int(match.group(2))
+            return x, y
+    except Exception as e:
+        return None
+def parse_sig(data):
+    match = re.search(r'Signature \(r, s\): \((\d+), (\d+)\)', data)
+    #print(data)
+    #print(match)
+    if match:
+        return int(match.group(1)), int(match.group(2))
+    else:
+        return None
+
+
+
+def hashmsg(m):
+    """ Hash a message using SHA-256 and return the integer representation. """
+    if isinstance(m, str):
+        m = m.encode()
+    return int.from_bytes(hashlib.sha256(m).digest(), byteorder='big')
+
+def check_public_key(private_int, curve, known_x, known_y):
+    private_key = ec.derive_private_key(private_int, curve, default_backend())
+    public_key = private_key.public_key()
+    public_numbers = public_key.public_numbers()
+    return (public_numbers.x == known_x) and (public_numbers.y == known_y)
+
+def int_to_openssh(private_int, curve):
+    private_key = ec.derive_private_key(private_int, curve, default_backend())
+    pem = private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.OpenSSH,
+        encryption_algorithm=serialization.NoEncryption()
+    )
+    return pem.decode()
+def shortest_vectors(B):
+    B = B.LLL()
+
+    for row in B.rows():
+        if not row.is_zero():
+            yield row
+
+
+# Source: https://github.com/jvdsn/crypto-attacks/blob/master/attacks/hnp/lattice_attack.py
+def attack(a, b, m, X):
+    """
+    Solves the hidden number problem using an attack based on the shortest vector problem.
+    The hidden number problem is defined as finding y such that {xi = {aij * yj} + bi mod m}.
+    :param a: the aij values
+    :param b: the bi values
+    :param m: the modulus
+    :param X: a bound on the xi values
+    :return: a generator generating tuples containing a list of xi values and a list of yj values
+    """
+    assert len(a) == len(b), "a and b lists should be of equal length."
+
+    n1 = len(a)
+    n2 = len(a[0])
+    B = matrix(QQ, n1 + n2 + 1, n1 + n2 + 1)
+    for i in range(n1):
+        for j in range(n2):
+            B[n1 + j, i] = a[i][j]
+
+        B[i, i] = m
+        B[n1 + n2, i] = b[i] - X // 2
+
+    for j in range(n2):
+        B[n1 + j, n1 + j] = X / QQ(m)
+
+    B[n1 + n2, n1 + n2] = X
+
+    for v in shortest_vectors(B):
+        xs = [int(v[i] + X // 2) for i in range(n1)]
+        ys = [(int(v[n1 + j] * m) // X) % m for j in range(n2)]
+        if all(y != 0 for y in ys) and v[n1 + n2] == X:
+            yield xs, ys
+# Source: https://github.com/jvdsn/crypto-attacks/blob/master/attacks/hnp/lattice_attack.py
+def dsa_known_msb(n, h, r, s, k):
+    """
+    Recovers the (EC)DSA private key and nonces if the most significant nonce bits are known.
+    :param n: the modulus
+    :param h: a list containing the hashed messages
+    :param r: a list containing the r values
+    :param s: a list containing the s values
+    :param k: a list containing the partial nonces (PartialIntegers)
+    :return: a generator generating tuples containing the possible private key and a list of nonces
+    """
+    assert len(h) == len(r) == len(s) == len(k), "h, r, s, and k lists should be of equal length."
+    a = []
+    b = []
+    X = 0
+    for hi, ri, si, ki in zip(h, r, s, k):
+        msb, msb_bit_length = ki.get_known_msb()
+        shift = 2 ** ki.get_unknown_lsb()
+        a.append([(pow(si, -1, n) * ri) % n])
+        b.append((pow(si, -1, n) * hi - shift * msb) % n)
+        X = max(X, shift)
+
+    for k_, x in attack(a, b, n, X):
+        yield x[0], [ki.sub([ki_]) for ki, ki_ in zip(k, k_)]
+
+# Source: https://github.com/jvdsn/crypto-attacks/blob/master/shared/partial_integer.py
+class PartialInteger:
+    """
+    Represents positive integers with some known and some unknown bits.
+    """
+
+    def __init__(self):
+        """
+        Constructs a new PartialInteger with total bit length 0 and no components.
+        """
+        self.bit_length = 0
+        self.unknowns = 0
+        self._components = []
+
+    def add_known(self, value, bit_length):
+        """
+        Adds a known component to the msb of this PartialInteger.
+        :param value: the value of the component
+        :param bit_length: the bit length of the component
+        :return: this PartialInteger, with the component added to the msb
+        """
+        self.bit_length += bit_length
+        self._components.append((value, bit_length))
+        return self
+
+    def add_unknown(self, bit_length):
+        """
+        Adds an unknown component to the msb of this PartialInteger.
+        :param bit_length: the bit length of the component
+        :return: this PartialInteger, with the component added to the msb
+        """
+        self.bit_length += bit_length
+        self.unknowns += 1
+        self._components.append((None, bit_length))
+        return self
+    .
+    ,
+...
+[SNIP]
+...
 ```
 
 ### Introduction
