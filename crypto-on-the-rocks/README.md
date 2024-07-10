@@ -1,7 +1,9 @@
 # Henny on the Rocks
 - **Author**: [supaaasuge](https://github.com/supaaasuge)
 - **Category**: Crypto
-- **Difficulty**: Hard 
+- **Difficulty**: Hard
+[Solution Writeup](https://github.com/supasuge/CTF-Challenges/blob/main/crypto-on-the-rocks/solution/README.md)
+
 ## Description
 When life gives you biased nonces, put them on the rocks and drink them straight up. This challenge is like a stiff pour of cryptographic whiskey. No chaser.
 
