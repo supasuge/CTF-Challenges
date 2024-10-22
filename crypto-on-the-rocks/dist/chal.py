@@ -63,11 +63,11 @@ def ecdsa_sign(d: int, m: str) -> Tuple[int, int]:
     return (r_i, s_i)
 
 def send_flag() -> str:
-        flag = FLAG.encode()
-        iv = get_random_bytes(16)
-        cipher = AES.new(AES_KEY, AES.MODE_CBC, iv)
-        ct = cipher.encrypt(pad(flag, AES.block_size))
-        return (iv + ct).hex()
+    flag = FLAG.encode()
+    iv = get_random_bytes(16)
+    cipher = AES.new(AES_KEY, AES.MODE_CBC, iv)
+    ct = cipher.encrypt(pad(flag, AES.block_size))
+    return (iv + ct).hex()
 
 def handle_signing() -> tuple:
     while True:
